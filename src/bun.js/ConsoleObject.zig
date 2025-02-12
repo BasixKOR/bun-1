@@ -8,7 +8,6 @@ const String = bun.String;
 const JSGlobalObject = JSC.JSGlobalObject;
 const JSValue = JSC.JSValue;
 const strings = bun.strings;
-const is_bindgen = JSC.is_bindgen;
 const ZigException = JSC.ZigException;
 const ZigString = JSC.ZigString;
 const VirtualMachine = JSC.VirtualMachine;
@@ -104,10 +103,6 @@ fn messageWithTypeAndLevel_(
     vals: [*]const JSValue,
     len: usize,
 ) bun.JSError!void {
-    if (comptime is_bindgen) {
-        return;
-    }
-
     var console = global.bunVM().console;
     defer console.default_indent +|= @as(u16, @intFromBool(message_type == .StartGroup));
 
@@ -1546,7 +1541,7 @@ pub const Formatter = struct {
                                     1;
                                 this.addForNewLine(digits);
                             } else {
-                                this.addForNewLine(bun.fmt.count("{d}", .{int}));
+                                this.addForNewLine(std.fmt.count("{d}", .{int}));
                             }
                             writer.print("{d}", .{int});
                         },
@@ -1581,7 +1576,7 @@ pub const Formatter = struct {
 
                             const abs = @abs(converted);
                             if (abs < max_before_e_notation and abs >= min_before_e_notation) {
-                                this.addForNewLine(bun.fmt.count("{d}", .{converted}));
+                                this.addForNewLine(std.fmt.count("{d}", .{converted}));
                                 writer.print("{d}", .{converted});
                             } else if (std.math.isNan(converted)) {
                                 this.addForNewLine("NaN".len);
@@ -2170,7 +2165,7 @@ pub const Formatter = struct {
                         1;
                     this.addForNewLine(digits);
                 } else {
-                    this.addForNewLine(bun.fmt.count("{d}", .{int}));
+                    this.addForNewLine(std.fmt.count("{d}", .{int}));
                 }
                 writer.print(comptime Output.prettyFmt("<r><yellow>{d}<r>", enable_ansi_colors), .{int});
             },
@@ -3438,7 +3433,7 @@ pub const Formatter = struct {
             "<r><d>, ... {d} more<r>";
 
         writer.print(comptime Output.prettyFmt(fmt_, enable_ansi_colors), .{
-            if (@typeInfo(Number) == .Float) bun.fmt.double(@floatCast(slice[0])) else slice[0],
+            if (@typeInfo(Number) == .float) bun.fmt.double(@floatCast(slice[0])) else slice[0],
         });
         var leftover = slice[1..];
         const max = 512;
@@ -3448,7 +3443,7 @@ pub const Formatter = struct {
             writer.space();
 
             writer.print(comptime Output.prettyFmt(fmt_, enable_ansi_colors), .{
-                if (@typeInfo(Number) == .Float) bun.fmt.double(@floatCast(el)) else el,
+                if (@typeInfo(Number) == .float) bun.fmt.double(@floatCast(el)) else el,
             });
         }
 
@@ -3691,17 +3686,17 @@ pub fn screenshot(
 ) callconv(JSC.conv) void {}
 
 comptime {
-    @export(messageWithTypeAndLevel, .{ .name = shim.symbolName("messageWithTypeAndLevel") });
-    @export(count, .{ .name = shim.symbolName("count") });
-    @export(countReset, .{ .name = shim.symbolName("countReset") });
-    @export(time, .{ .name = shim.symbolName("time") });
-    @export(timeLog, .{ .name = shim.symbolName("timeLog") });
-    @export(timeEnd, .{ .name = shim.symbolName("timeEnd") });
-    @export(profile, .{ .name = shim.symbolName("profile") });
-    @export(profileEnd, .{ .name = shim.symbolName("profileEnd") });
-    @export(takeHeapSnapshot, .{ .name = shim.symbolName("takeHeapSnapshot") });
-    @export(timeStamp, .{ .name = shim.symbolName("timeStamp") });
-    @export(record, .{ .name = shim.symbolName("record") });
-    @export(recordEnd, .{ .name = shim.symbolName("recordEnd") });
-    @export(screenshot, .{ .name = shim.symbolName("screenshot") });
+    @export(&messageWithTypeAndLevel, .{ .name = shim.symbolName("messageWithTypeAndLevel") });
+    @export(&count, .{ .name = shim.symbolName("count") });
+    @export(&countReset, .{ .name = shim.symbolName("countReset") });
+    @export(&time, .{ .name = shim.symbolName("time") });
+    @export(&timeLog, .{ .name = shim.symbolName("timeLog") });
+    @export(&timeEnd, .{ .name = shim.symbolName("timeEnd") });
+    @export(&profile, .{ .name = shim.symbolName("profile") });
+    @export(&profileEnd, .{ .name = shim.symbolName("profileEnd") });
+    @export(&takeHeapSnapshot, .{ .name = shim.symbolName("takeHeapSnapshot") });
+    @export(&timeStamp, .{ .name = shim.symbolName("timeStamp") });
+    @export(&record, .{ .name = shim.symbolName("record") });
+    @export(&recordEnd, .{ .name = shim.symbolName("recordEnd") });
+    @export(&screenshot, .{ .name = shim.symbolName("screenshot") });
 }
