@@ -363,7 +363,6 @@ declare function $isAbortSignal(signal: unknown): signal is AbortSignal;
 declare function $isAbsolute(): TODO;
 declare function $isDisturbed(): TODO;
 declare function $isPaused(): TODO;
-declare function $isWindows(): TODO;
 declare function $join(): TODO;
 declare function $kind(): TODO;
 declare function $lazyStreamPrototypeMap(): TODO;
@@ -646,3 +645,5 @@ declare function $ERR_ILLEGAL_CONSTRUCTOR(): TypeError;
 declare function $toClass(fn: Function, name: string, base?: Function | undefined | null);
 
 declare function $min(a: number, b: number): number;
+
+declare function $checkBufferRead(buf: Buffer, offset: number, byteLength: number): undefined;

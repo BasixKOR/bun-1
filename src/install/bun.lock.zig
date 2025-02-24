@@ -295,7 +295,7 @@ pub const Stringifier = struct {
                     const dep = deps_buf[dep_id];
 
                     // clobber, there isn't data
-                    try pkg_map.put(try bun.fmt.allocPrint(allocator, "{s}{s}{s}", .{
+                    try pkg_map.put(try std.fmt.allocPrint(allocator, "{s}{s}{s}", .{
                         node.relative_path,
                         if (node.depth == 0) "" else "/",
                         dep.name.slice(buf),
@@ -510,9 +510,9 @@ pub const Stringifier = struct {
                     const name_and_version, const patch_path = value.*;
                     try writeIndent(writer, indent);
                     try writer.print(
-                        \\"{s}": "{s}",
+                        \\{}: {},
                         \\
-                    , .{ name_and_version, patch_path.slice(buf) });
+                    , .{ bun.fmt.formatJSONStringUTF8(name_and_version, .{}), patch_path.fmtJson(buf, .{}) });
                 }
 
                 try decIndent(writer, indent);
@@ -534,9 +534,9 @@ pub const Stringifier = struct {
                     const name, const version = value.*;
                     try writeIndent(writer, indent);
                     try writer.print(
-                        \\"{s}": "{s}",
+                        \\{}: {},
                         \\
-                    , .{ name.slice(buf), version.literal.slice(buf) });
+                    , .{ name.fmtJson(buf, .{}), version.literal.fmtJson(buf, .{}) });
                 }
 
                 try decIndent(writer, indent);
@@ -940,9 +940,7 @@ pub const Stringifier = struct {
             } else {
                 any = true;
             }
-            try writer.writeAll(
-                \\ "os": 
-            );
+            try writer.writeAll(" \"os\": ");
             try Negatable(Npm.OperatingSystem).toJson(meta.os, writer);
         }
 
@@ -952,9 +950,7 @@ pub const Stringifier = struct {
             } else {
                 any = true;
             }
-            try writer.writeAll(
-                \\ "cpu": 
-            );
+            try writer.writeAll(" \"cpu\": ");
             try Negatable(Npm.Architecture).toJson(meta.arch, writer);
         }
 
@@ -1154,10 +1150,10 @@ pub const Stringifier = struct {
 };
 
 const workspace_dependency_groups = [4]struct { []const u8, Dependency.Behavior }{
-    .{ "dependencies", Dependency.Behavior.prod },
-    .{ "devDependencies", Dependency.Behavior.dev },
-    .{ "optionalDependencies", Dependency.Behavior.optional },
-    .{ "peerDependencies", Dependency.Behavior.peer },
+    .{ "dependencies", .{ .prod = true } },
+    .{ "devDependencies", .{ .dev = true } },
+    .{ "optionalDependencies", .{ .optional = true } },
+    .{ "peerDependencies", .{ .peer = true } },
 };
 
 const ParseError = OOM || error{
@@ -1526,7 +1522,7 @@ pub fn parseIntoBinaryLockfile(
                 const dep: Dependency = .{
                     .name = try string_buf.appendWithHash(name, name_hash),
                     .name_hash = name_hash,
-                    .behavior = Dependency.Behavior.workspace,
+                    .behavior = .{ .workspace = true },
                     .version = .{
                         .tag = .workspace,
                         .value = .{
@@ -1589,7 +1585,7 @@ pub fn parseIntoBinaryLockfile(
                 }
 
                 // there should be no duplicates
-                const pkg_id = try lockfile.appendPackageDedupe(&pkg, string_buf.bytes.items);
+                const pkg_id = try lockfile.appendPackageNoDedupe(&pkg, string_buf.bytes.items);
 
                 const entry = try pkg_map.getOrPut(name);
                 if (entry.found_existing) {
@@ -1849,7 +1845,7 @@ pub fn parseIntoBinaryLockfile(
             pkg.name_hash = name_hash;
             pkg.resolution = res;
 
-            const pkg_id = try lockfile.appendPackageDedupe(&pkg, string_buf.bytes.items);
+            const pkg_id = try lockfile.appendPackageNoDedupe(&pkg, string_buf.bytes.items);
 
             const entry = try pkg_map.getOrPut(pkg_path);
             if (entry.found_existing) {
@@ -1908,7 +1904,7 @@ pub fn parseIntoBinaryLockfile(
                     const dep = &lockfile.buffers.dependencies.items[dep_id];
                     const dep_name = dep.name.slice(lockfile.buffers.string_bytes.items);
 
-                    const workspace_node_modules = bun.fmt.bufPrint(&path_buf, "{s}/{s}", .{ workspace_name, dep_name }) catch {
+                    const workspace_node_modules = std.fmt.bufPrint(&path_buf, "{s}/{s}", .{ workspace_name, dep_name }) catch {
                         try log.addErrorFmt(source, root_pkg_exr.loc, allocator, "Workspace and dependency name too long: '{s}/{s}'", .{ workspace_name, dep_name });
                         return error.InvalidPackageInfo;
                     };
