@@ -170,7 +170,7 @@ pub const ExternalModules = struct {
             }
         }
 
-        result.patterns = patterns.toOwnedSlice() catch @panic("TODO");
+        result.patterns = patterns.toOwnedSlice() catch bun.outOfMemory();
 
         return result;
     }
@@ -675,14 +675,28 @@ pub const Loader = enum(u8) {
         };
     }
 
-    pub fn toMimeType(this: Loader) bun.http.MimeType {
+    pub fn toMimeType(this: Loader, paths: []const []const u8) bun.http.MimeType {
         return switch (this) {
             .jsx, .js, .ts, .tsx => bun.http.MimeType.javascript,
             .css => bun.http.MimeType.css,
             .toml, .json => bun.http.MimeType.json,
             .wasm => bun.http.MimeType.wasm,
             .html => bun.http.MimeType.html,
-            else => bun.http.MimeType.other,
+            else => {
+                for (paths) |path| {
+                    var extname = std.fs.path.extension(path);
+                    if (strings.startsWithChar(extname, '.')) {
+                        extname = extname[1..];
+                    }
+                    if (extname.len > 0) {
+                        if (bun.http.MimeType.byExtensionNoDefault(extname)) |mime| {
+                            return mime;
+                        }
+                    }
+                }
+
+                return bun.http.MimeType.other;
+            },
         };
     }
 
@@ -733,7 +747,7 @@ pub const Loader = enum(u8) {
         }
 
         var zig_str = JSC.ZigString.init("");
-        loader.toZigString(&zig_str, global);
+        try loader.toZigString(&zig_str, global);
         if (zig_str.len == 0) return null;
 
         return fromString(zig_str.slice()) orelse {
@@ -991,13 +1005,18 @@ pub const ESMConditions = struct {
 };
 
 pub const JSX = struct {
-    pub const RuntimeMap = bun.ComptimeStringMap(JSX.Runtime, .{
-        .{ "classic", .classic },
-        .{ "automatic", .automatic },
-        .{ "react", .classic },
-        .{ "react-jsx", .automatic },
-        .{ "react-jsxdev", .automatic },
-        .{ "solid", .solid },
+    const RuntimeDevelopmentPair = struct {
+        runtime: JSX.Runtime,
+        development: ?bool,
+    };
+
+    pub const RuntimeMap = bun.ComptimeStringMap(RuntimeDevelopmentPair, .{
+        .{ "classic", RuntimeDevelopmentPair{ .runtime = .classic, .development = null } },
+        .{ "automatic", RuntimeDevelopmentPair{ .runtime = .automatic, .development = true } },
+        .{ "react", RuntimeDevelopmentPair{ .runtime = .classic, .development = null } },
+        .{ "react-jsx", RuntimeDevelopmentPair{ .runtime = .automatic, .development = true } },
+        .{ "react-jsxdev", RuntimeDevelopmentPair{ .runtime = .automatic, .development = true } },
+        .{ "solid", RuntimeDevelopmentPair{ .runtime = .solid, .development = null } },
     });
 
     pub const Pragma = struct {
@@ -1013,6 +1032,10 @@ pub const JSX = struct {
         classic_import_source: string = "react",
         package_name: []const u8 = "react",
 
+        /// Configuration Priority:
+        /// - `--define=process.env.NODE_ENV=...`
+        /// - `NODE_ENV=...`
+        /// - tsconfig.json's `compilerOptions.jsx` (`react-jsx` or `react-jsxdev`)
         development: bool = true,
         parse: bool = true,
 
@@ -1106,7 +1129,7 @@ pub const JSX = struct {
         // ...unless new is "React.createElement" and original is ["React", "createElement"]
         // saves an allocation for the majority case
         pub fn memberListToComponentsIfDifferent(allocator: std.mem.Allocator, original: []const string, new: string) ![]const string {
-            var splitter = std.mem.split(u8, new, ".");
+            var splitter = std.mem.splitScalar(u8, new, '.');
             const count = strings.countChar(new, '.') + 1;
 
             var needs_alloc = false;
@@ -1131,7 +1154,7 @@ pub const JSX = struct {
 
             var out = try allocator.alloc(string, count);
 
-            splitter = std.mem.split(u8, new, ".");
+            splitter = std.mem.splitScalar(u8, new, '.');
             var i: usize = 0;
             while (splitter.next()) |str| {
                 if (str.len == 0) continue;
@@ -1575,13 +1598,29 @@ pub const BundleOptions = struct {
 
     supports_multiple_outputs: bool = true,
 
+    /// This is set by the process environment, which is used to override the
+    /// JSX configuration. When this is unspecified, the tsconfig.json is used
+    /// to determine if a development jsx-runtime is used (by going between
+    /// "react-jsx" or "react-jsx-dev-runtime")
+    force_node_env: ForceNodeEnv = .unspecified,
+
+    ignore_module_resolution_errors: bool = false,
+
+    pub const ForceNodeEnv = enum {
+        unspecified,
+        development,
+        production,
+    };
+
     pub fn isTest(this: *const BundleOptions) bool {
         return this.rewrite_jest_for_tests;
     }
 
     pub fn setProduction(this: *BundleOptions, value: bool) void {
-        this.production = value;
-        this.jsx.development = !value;
+        if (this.force_node_env == .unspecified) {
+            this.production = value;
+            this.jsx.development = !value;
+        }
     }
 
     pub const default_unwrap_commonjs_packages = [_]string{

@@ -86,19 +86,17 @@ pub const StatWatcherScheduler = struct {
     /// Set the timer (this function is not thread safe, should be called only from the main thread)
     fn setTimer(this: *StatWatcherScheduler, interval: i32) void {
 
-        // if the timer is active we need to remove it
-        if (this.event_loop_timer.state == .ACTIVE) {
-            this.vm.timer.remove(&this.event_loop_timer);
-        }
-
         // if the interval is 0 means that we stop the timer
         if (interval == 0) {
+            // if the timer is active we need to remove it
+            if (this.event_loop_timer.state == .ACTIVE) {
+                this.vm.timer.remove(&this.event_loop_timer);
+            }
             return;
         }
 
         // reschedule the timer
-        this.event_loop_timer.next = bun.timespec.msFromNow(interval);
-        this.vm.timer.insert(&this.event_loop_timer);
+        this.vm.timer.update(&this.event_loop_timer, &bun.timespec.msFromNow(interval));
     }
 
     /// Schedule a task to set the timer in the main thread
@@ -218,7 +216,7 @@ pub const StatWatcher = struct {
             this.poll_ref.unref(this.ctx);
         }
         this.closed = true;
-        this.last_jsvalue.clear();
+        this.last_jsvalue.deinit();
 
         bun.default_allocator.free(this.path);
         bun.default_allocator.destroy(this);
@@ -309,21 +307,17 @@ pub const StatWatcher = struct {
     }
 
     pub fn hasPendingActivity(this: *StatWatcher) bool {
-        @fence(.acquire);
-
         return this.used_by_scheduler_thread.load(.acquire);
     }
 
     /// Stops file watching but does not free the instance.
-    pub fn close(
-        this: *StatWatcher,
-    ) void {
+    pub fn close(this: *StatWatcher) void {
         if (this.persistent) {
             this.persistent = false;
             this.poll_ref.unref(this.ctx);
         }
         this.closed = true;
-        this.last_jsvalue.clear();
+        this.last_jsvalue.clearWithoutDeallocation();
     }
 
     pub fn doClose(this: *StatWatcher, _: *JSC.JSGlobalObject, _: *JSC.CallFrame) bun.JSError!JSC.JSValue {
@@ -490,7 +484,7 @@ pub const StatWatcher = struct {
             .last_check = std.time.Instant.now() catch unreachable,
             // InitStatTask is responsible for setting this
             .last_stat = std.mem.zeroes(bun.Stat),
-            .last_jsvalue = JSC.Strong.init(),
+            .last_jsvalue = .empty,
         };
         errdefer this.deinit();
 

@@ -363,7 +363,6 @@ declare function $isAbortSignal(signal: unknown): signal is AbortSignal;
 declare function $isAbsolute(): TODO;
 declare function $isDisturbed(): TODO;
 declare function $isPaused(): TODO;
-declare function $isWindows(): TODO;
 declare function $join(): TODO;
 declare function $kind(): TODO;
 declare function $lazyStreamPrototypeMap(): TODO;
@@ -630,6 +629,7 @@ declare function $ERR_STREAM_UNSHIFT_AFTER_END_EVENT(): Error;
 declare function $ERR_STREAM_PUSH_AFTER_EOF(): Error;
 declare function $ERR_STREAM_UNABLE_TO_PIPE(): Error;
 declare function $ERR_ILLEGAL_CONSTRUCTOR(): TypeError;
+declare function $ERR_SERVER_ALREADY_LISTEN(): Error;
 
 /**
  * Convert a function to a class-like object.
@@ -646,3 +646,5 @@ declare function $ERR_ILLEGAL_CONSTRUCTOR(): TypeError;
 declare function $toClass(fn: Function, name: string, base?: Function | undefined | null);
 
 declare function $min(a: number, b: number): number;
+
+declare function $checkBufferRead(buf: Buffer, offset: number, byteLength: number): undefined;
