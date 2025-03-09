@@ -95,24 +95,7 @@ pub const Image = union(enum) {
     }
 
     pub inline fn eql(this: *const Image, other: *const Image) bool {
-        return switch (this.*) {
-            .none => switch (other.*) {
-                .none => true,
-                else => false,
-            },
-            .url => |*a| switch (other.*) {
-                .url => a.eql(&other.url),
-                else => false,
-            },
-            .image_set => |*a| switch (other.*) {
-                .image_set => a.eql(&other.image_set),
-                else => false,
-            },
-            .gradient => |a| switch (other.*) {
-                .gradient => a.eql(other.gradient),
-                else => false,
-            },
-        };
+        return css.implementEql(@This(), this, other);
     }
 
     pub fn deepClone(this: *const @This(), allocator: std.mem.Allocator) @This() {
@@ -294,7 +277,7 @@ pub const ImageSet = struct {
     }
 
     pub fn eql(this: *const ImageSet, other: *const ImageSet) bool {
-        return this.vendor_prefix.eql(other.vendor_prefix) and css.generic.eqlList(ImageSetOption, &this.options, &other.options);
+        return css.implementEql(@This(), this, other);
     }
 
     pub fn deepClone(this: *const @This(), allocator: std.mem.Allocator) @This() {
@@ -324,9 +307,10 @@ pub const ImageSetOption = struct {
         const start_position = input.input.tokenizer.getPosition();
         const loc = input.currentSourceLocation();
         const image = if (input.tryParse(css.Parser.expectUrlOrString, .{}).asValue()) |url| brk: {
-            const record_idx = switch (input.addImportRecordForUrl(
+            const record_idx = switch (input.addImportRecord(
                 url,
                 start_position,
+                .url,
             )) {
                 .result => |idx| idx,
                 .err => |e| return .{ .err = e },
@@ -411,12 +395,7 @@ pub const ImageSetOption = struct {
     }
 
     pub fn eql(lhs: *const ImageSetOption, rhs: *const ImageSetOption) bool {
-        return lhs.image.eql(&rhs.image) and lhs.resolution.eql(&rhs.resolution) and (brk: {
-            if (lhs.file_type != null and rhs.file_type != null) {
-                break :brk bun.strings.eql(lhs.file_type.?, rhs.file_type.?);
-            }
-            break :brk false;
-        });
+        return css.implementEql(@This(), lhs, rhs);
     }
 };
 
