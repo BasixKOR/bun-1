@@ -1,4 +1,4 @@
-import { define } from "../../codegen/class-definitions";
+import { define, InvalidThisBehavior } from "../../codegen/class-definitions";
 
 export default [
   define({
@@ -131,8 +131,7 @@ export default [
   }),
   define({
     name: "Timeout",
-    construct: false,
-    noConstructor: true,
+    construct: true,
     finalize: true,
     configurable: false,
     klass: {},
@@ -141,74 +140,77 @@ export default [
       ref: {
         fn: "doRef",
         length: 0,
+        invalidThisBehavior: InvalidThisBehavior.NoOp,
       },
       refresh: {
         fn: "doRefresh",
         length: 0,
+        invalidThisBehavior: InvalidThisBehavior.NoOp,
       },
       unref: {
         fn: "doUnref",
         length: 0,
+        invalidThisBehavior: InvalidThisBehavior.NoOp,
       },
       hasRef: {
         fn: "hasRef",
         length: 0,
+        invalidThisBehavior: InvalidThisBehavior.NoOp,
       },
       ["@@toPrimitive"]: {
         fn: "toPrimitive",
         length: 1,
+        invalidThisBehavior: InvalidThisBehavior.NoOp,
+      },
+      _destroyed: {
+        getter: "getDestroyed",
+      },
+      ["@@dispose"]: {
+        fn: "dispose",
+        length: 0,
+        invalidThisBehavior: InvalidThisBehavior.NoOp,
       },
     },
     values: ["arguments", "callback"],
   }),
   define({
-    name: "Dirent",
+    name: "Immediate",
     construct: true,
     finalize: true,
-
+    configurable: false,
     klass: {},
-
-    // TODO: generate-classes needs to handle Object.create properly when
-    // functions are used. The functions need a fallback implementation to use
-    // getters.
-    supportsObjectCreate: true,
-
+    JSType: "0b11101110",
     proto: {
-      isBlockDevice: {
-        fn: "isBlockDevice",
+      ref: {
+        fn: "doRef",
         length: 0,
+        invalidThisBehavior: InvalidThisBehavior.NoOp,
       },
-      isCharacterDevice: {
-        fn: "isCharacterDevice",
+      unref: {
+        fn: "doUnref",
         length: 0,
+        invalidThisBehavior: InvalidThisBehavior.NoOp,
       },
-      isDirectory: {
-        fn: "isDirectory",
+      hasRef: {
+        fn: "hasRef",
         length: 0,
+        invalidThisBehavior: InvalidThisBehavior.NoOp,
       },
-      isFIFO: {
-        fn: "isFIFO",
-        length: 0,
+      ["@@toPrimitive"]: {
+        fn: "toPrimitive",
+        length: 1,
+        invalidThisBehavior: InvalidThisBehavior.NoOp,
       },
-      isFile: {
-        fn: "isFile",
-        length: 0,
+      _destroyed: {
+        getter: "getDestroyed",
       },
-      isSocket: {
-        fn: "isSocket",
+      ["@@dispose"]: {
+        fn: "dispose",
         length: 0,
-      },
-      isSymbolicLink: {
-        fn: "isSymbolicLink",
-        length: 0,
+        invalidThisBehavior: InvalidThisBehavior.NoOp,
       },
     },
-
-    own: {
-      name: "getName",
-      path: "getPath",
-      parentPath: "getPath",
-    },
+    values: ["arguments", "callback"],
   }),
   define({
     name: "NodeJSFS",

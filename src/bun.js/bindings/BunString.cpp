@@ -65,14 +65,6 @@ extern "C" bool BunString__fromJS(JSC::JSGlobalObject* globalObject, JSC::Encode
     return bunString->tag != BunStringTag::Dead;
 }
 
-extern "C" bool BunString__fromJSRef(JSC::JSGlobalObject* globalObject, JSC::EncodedJSValue encodedValue, BunString* bunString)
-{
-
-    JSC::JSValue value = JSC::JSValue::decode(encodedValue);
-    *bunString = Bun::toStringRef(globalObject, value);
-    return bunString->tag != BunStringTag::Dead;
-}
-
 extern "C" BunString BunString__createAtom(const char* bytes, size_t length)
 {
     ASSERT(simdutf::validate_ascii(bytes, length));
@@ -96,7 +88,7 @@ extern "C" BunString BunString__tryCreateAtom(const char* bytes, size_t length)
 
 extern "C" JSC::EncodedJSValue BunString__createUTF8ForJS(JSC::JSGlobalObject* globalObject, const char* ptr, size_t length)
 {
-    auto& vm = globalObject->vm();
+    auto& vm = JSC::getVM(globalObject);
     auto scope = DECLARE_THROW_SCOPE(vm);
     if (length == 0) {
         return JSValue::encode(jsEmptyString(vm));
@@ -115,7 +107,7 @@ extern "C" JSC::EncodedJSValue BunString__createUTF8ForJS(JSC::JSGlobalObject* g
 
 extern "C" JSC::EncodedJSValue BunString__transferToJS(BunString* bunString, JSC::JSGlobalObject* globalObject)
 {
-    auto& vm = globalObject->vm();
+    auto& vm = JSC::getVM(globalObject);
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     if (UNLIKELY(bunString->tag == BunStringTag::Empty || bunString->tag == BunStringTag::Dead)) {
@@ -159,6 +151,7 @@ extern "C" int64_t BunString__toInt32(BunString* bunString)
 }
 
 namespace Bun {
+
 JSC::JSValue toJS(JSC::JSGlobalObject* globalObject, BunString bunString)
 {
     if (bunString.tag == BunStringTag::Empty || bunString.tag == BunStringTag::Dead) {
@@ -166,8 +159,7 @@ JSC::JSValue toJS(JSC::JSGlobalObject* globalObject, BunString bunString)
     }
     if (bunString.tag == BunStringTag::WTFStringImpl) {
 #if ASSERT_ENABLED
-        unsigned refCount = bunString.impl.wtf->refCount();
-        ASSERT(refCount > 0 && !bunString.impl.wtf->isEmpty());
+        ASSERT(bunString.impl.wtf->hasAtLeastOneRef() && !bunString.impl.wtf->isEmpty());
 #endif
 
         return JSValue(jsString(globalObject->vm(), String(bunString.impl.wtf)));
@@ -431,7 +423,7 @@ extern "C" JSC::EncodedJSValue BunString__createArray(
     if (length == 0)
         return JSValue::encode(JSC::constructEmptyArray(globalObject, nullptr));
 
-    auto& vm = globalObject->vm();
+    auto& vm = JSC::getVM(globalObject);
     auto throwScope = DECLARE_THROW_SCOPE(vm);
 
     // Using tryCreateUninitialized here breaks stuff..
@@ -451,18 +443,23 @@ extern "C" JSC::EncodedJSValue BunString__createArray(
 
 extern "C" void BunString__toWTFString(BunString* bunString)
 {
+    WTF::String str;
     if (bunString->tag == BunStringTag::ZigString) {
         if (Zig::isTaggedExternalPtr(bunString->impl.zig.ptr)) {
-            bunString->impl.wtf = Zig::toString(bunString->impl.zig).impl();
+            str = Zig::toString(bunString->impl.zig);
         } else {
-            bunString->impl.wtf = Zig::toStringCopy(bunString->impl.zig).impl();
+            str = Zig::toStringCopy(bunString->impl.zig);
         }
 
-        bunString->tag = BunStringTag::WTFStringImpl;
     } else if (bunString->tag == BunStringTag::StaticZigString) {
-        bunString->impl.wtf = Zig::toStringStatic(bunString->impl.zig).impl();
-        bunString->tag = BunStringTag::WTFStringImpl;
+        str = Zig::toStringStatic(bunString->impl.zig);
+    } else {
+        return;
     }
+
+    auto impl = str.releaseImpl();
+    bunString->impl.wtf = impl.leakRef();
+    bunString->tag = BunStringTag::WTFStringImpl;
 }
 
 extern "C" BunString URL__getFileURLString(BunString* filePath)
@@ -662,6 +659,17 @@ WTF::String BunString::toWTFString(ZeroCopyTag) const
     }
 
     return WTF::String();
+}
+
+WTF::String BunString::toWTFString(NonNullTag) const
+{
+    WTF::String res = toWTFString(ZeroCopy);
+    if (res.isNull()) {
+        // TODO(dylan-conway): also use emptyString in toWTFString(ZeroCopy) and toWTFString. This will
+        // require reviewing each call site for isNull() checks and most likely changing them to isEmpty()
+        return WTF::emptyString();
+    }
+    return res;
 }
 
 WTF::String BunString::transferToWTFString()

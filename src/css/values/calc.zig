@@ -45,6 +45,45 @@ pub fn needsDeepclone(comptime V: type) bool {
     };
 }
 
+const Tag_ = enum(u8) {
+    /// A literal value.
+    value = 1,
+    /// A literal number.
+    number = 2,
+    /// A sum of two calc expressions.
+    sum = 4,
+    /// A product of a number and another calc expression.
+    product = 8,
+    /// A math function, such as `calc()`, `min()`, or `max()`.
+    function = 16,
+};
+
+const CalcUnit = enum {
+    abs,
+    acos,
+    asin,
+    atan,
+    atan2,
+    calc,
+    clamp,
+    cos,
+    exp,
+    hypot,
+    log,
+    max,
+    min,
+    mod,
+    pow,
+    rem,
+    round,
+    sign,
+    sin,
+    sqrt,
+    tan,
+
+    pub const Map = bun.ComptimeEnumMap(CalcUnit);
+};
+
 /// A mathematical expression used within the `calc()` function.
 ///
 /// This type supports generic value types. Values such as `Length`, `Percentage`,
@@ -72,18 +111,7 @@ pub fn Calc(comptime V: type) type {
         /// A math function, such as `calc()`, `min()`, or `max()`.
         function: *MathFunction(V),
 
-        const Tag = enum(u8) {
-            /// A literal value.
-            value = 1,
-            /// A literal number.
-            number = 2,
-            /// A sum of two calc expressions.
-            sum = 4,
-            /// A product of a number and another calc expression.
-            product = 8,
-            /// A math function, such as `calc()`, `min()`, or `max()`.
-            function = 16,
-        };
+        const Tag = Tag_;
 
         const This = @This();
 
@@ -169,20 +197,15 @@ pub fn Calc(comptime V: type) type {
         }
 
         // TODO: addValueOwned
-        fn addValue(allocator: Allocator, lhs: V, rhs: V) V {
+        pub fn addValue(allocator: Allocator, lhs: V, rhs: V) V {
             return switch (V) {
                 f32 => return lhs + rhs,
-                Angle => return lhs.add(rhs),
-                // CSSNumber => return lhs.add(rhs),
-                Length => return lhs.add(allocator, rhs),
-                Percentage => return lhs.add(allocator, rhs),
-                Time => return lhs.add(allocator, rhs),
-                else => lhs.add(allocator, rhs),
+                else => lhs.addInternal(allocator, rhs),
             };
         }
 
         // TODO: intoValueOwned
-        fn intoValue(this: @This(), allocator: std.mem.Allocator) V {
+        pub fn intoValue(this: @This(), allocator: std.mem.Allocator) V {
             switch (V) {
                 Angle => return switch (this) {
                     .value => |v| v.*,
@@ -222,19 +245,26 @@ pub fn Calc(comptime V: type) type {
             }
         }
 
+        pub fn intoCalc(val: V, allocator: std.mem.Allocator) Calc(V) {
+            return switch (V) {
+                f32 => .{ .value = bun.create(allocator, f32, val) },
+                else => val.intoCalc(allocator),
+            };
+        }
+
         // TODO: change to addOwned()
         pub fn add(this: @This(), allocator: std.mem.Allocator, rhs: @This()) @This() {
             if (this == .value and rhs == .value) {
                 // PERF: we can reuse the allocation here
-                return .{ .value = bun.create(allocator, V, addValue(allocator, this.value.*, rhs.value.*)) };
+                return intoCalc(addValue(allocator, this.value.*, rhs.value.*), allocator);
             } else if (this == .number and rhs == .number) {
                 return .{ .number = this.number + rhs.number };
             } else if (this == .value) {
                 // PERF: we can reuse the allocation here
-                return .{ .value = bun.create(allocator, V, addValue(allocator, this.value.*, intoValue(rhs, allocator))) };
+                return intoCalc(addValue(allocator, this.value.*, intoValue(rhs, allocator)), allocator);
             } else if (rhs == .value) {
                 // PERF: we can reuse the allocation here
-                return .{ .value = bun.create(allocator, V, addValue(allocator, intoValue(this, allocator), rhs.value.*)) };
+                return intoCalc(addValue(allocator, intoValue(this, allocator), rhs.value.*), allocator);
             } else if (this == .function) {
                 return This{
                     .sum = .{
@@ -250,11 +280,7 @@ pub fn Calc(comptime V: type) type {
                     },
                 };
             } else {
-                return .{ .value = bun.create(
-                    allocator,
-                    V,
-                    addValue(allocator, intoValue(this, allocator), intoValue(rhs, allocator)),
-                ) };
+                return intoCalc(addValue(allocator, intoValue(this, allocator), intoValue(rhs, allocator)), allocator);
             }
         }
 
@@ -268,32 +294,6 @@ pub fn Calc(comptime V: type) type {
             };
             return parseWith(input, {}, Fn.parseWithFn);
         }
-
-        const CalcUnit = enum {
-            abs,
-            acos,
-            asin,
-            atan,
-            atan2,
-            calc,
-            clamp,
-            cos,
-            exp,
-            hypot,
-            log,
-            max,
-            min,
-            mod,
-            pow,
-            rem,
-            round,
-            sign,
-            sin,
-            sqrt,
-            tan,
-
-            pub const Map = bun.ComptimeEnumMap(CalcUnit);
-        };
 
         pub fn parseWith(
             input: *css.Parser,
@@ -936,8 +936,10 @@ pub fn Calc(comptime V: type) type {
                     };
                     if (rhs == .number) {
                         const val = rhs.number;
-                        node = node.mulF32(input.allocator(), 1.0 / val);
-                        continue;
+                        if (val != 0.0) {
+                            node = node.mulF32(input.allocator(), 1.0 / val);
+                            continue;
+                        }
                     }
                     return .{ .err = input.newCustomError(css.ParserError{ .invalid_value = {} }) };
                 } else {

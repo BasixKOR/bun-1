@@ -31,7 +31,7 @@ const JSValue = JSC.JSValue;
 const JSGlobalObject = JSC.JSGlobalObject;
 
 const VirtualMachine = JSC.VirtualMachine;
-const Task = @import("../javascript.zig").Task;
+const Task = JSC.Task;
 
 const picohttp = bun.picohttp;
 
@@ -239,13 +239,11 @@ pub const TextEncoder = struct {
 };
 
 comptime {
-    if (!JSC.is_bindgen) {
-        _ = TextEncoder.TextEncoder__encode8;
-        _ = TextEncoder.TextEncoder__encode16;
-        _ = TextEncoder.TextEncoder__encodeInto8;
-        _ = TextEncoder.TextEncoder__encodeInto16;
-        _ = TextEncoder.TextEncoder__encodeRopeString;
-    }
+    _ = TextEncoder.TextEncoder__encode8;
+    _ = TextEncoder.TextEncoder__encode16;
+    _ = TextEncoder.TextEncoder__encodeInto8;
+    _ = TextEncoder.TextEncoder__encodeInto16;
+    _ = TextEncoder.TextEncoder__encodeRopeString;
 }
 
 /// https://encoding.spec.whatwg.org/encodings.json
@@ -426,7 +424,7 @@ pub const TextEncoderStreamEncoder = struct {
             return globalObject.throwNotEnoughArguments("TextEncoderStreamEncoder.encode", 1, arguments.len);
         }
 
-        const str: ZigString = (arguments[0].toStringOrNull(globalObject) orelse return .zero).getZigString(globalObject);
+        const str = try arguments[0].getZigString(globalObject);
 
         if (str.is16Bit()) {
             return this.encodeUTF16(globalObject, str.utf16SliceAligned());
@@ -1255,7 +1253,7 @@ pub const Encoder = struct {
             },
 
             .hex => {
-                return strings.decodeHexToBytes(to_ptr[0..to_len], u8, input[0..len]);
+                return strings.decodeHexToBytesTruncate(to_ptr[0..to_len], u8, input[0..len]);
             },
 
             .base64, .base64url => {
@@ -1334,7 +1332,7 @@ pub const Encoder = struct {
             },
 
             .hex => {
-                return strings.decodeHexToBytes(to[0..to_len], u16, input[0..len]);
+                return strings.decodeHexToBytesTruncate(to[0..to_len], u16, input[0..len]);
             },
 
             .base64, .base64url => {
@@ -1471,24 +1469,20 @@ pub const Encoder = struct {
     }
 
     comptime {
-        if (!JSC.is_bindgen) {
-            _ = Bun__encoding__writeLatin1;
-            _ = Bun__encoding__writeUTF16;
+        _ = Bun__encoding__writeLatin1;
+        _ = Bun__encoding__writeUTF16;
 
-            _ = Bun__encoding__byteLengthLatin1;
-            _ = Bun__encoding__byteLengthUTF16;
+        _ = Bun__encoding__byteLengthLatin1;
+        _ = Bun__encoding__byteLengthUTF16;
 
-            _ = Bun__encoding__toString;
-            _ = Bun__encoding__toStringUTF8;
+        _ = Bun__encoding__toString;
+        _ = Bun__encoding__toStringUTF8;
 
-            _ = Bun__encoding__constructFromLatin1;
-            _ = Bun__encoding__constructFromUTF16;
-        }
+        _ = Bun__encoding__constructFromLatin1;
+        _ = Bun__encoding__constructFromUTF16;
     }
 };
 
 comptime {
-    if (!JSC.is_bindgen) {
-        std.testing.refAllDecls(Encoder);
-    }
+    std.testing.refAllDecls(Encoder);
 }
